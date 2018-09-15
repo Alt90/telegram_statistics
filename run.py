@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timedelta
 
 import asyncio
 import socks
@@ -12,14 +13,16 @@ logging.basicConfig(level=logging.WARNING, filename='logs.log')
 
 async def stat(loop):
     proxy = (socks.SOCKS5, config.PROXY_HOST, config.PROXY_PORT, '', config.PROXY_USERNAME, config.PROXY_PASSWORD)
+    offset_date = datetime.now().replace(hour=0, minute=0, second=0) - timedelta(days=config.COUNT_DAYS_FOR_ANALYZE)
     async with TelegramClient('statistics', config.API_ID, config.API_HASH, loop=loop, proxy=proxy) as client:
         await client.connect()
         all_statistics = {}
         async for dialog in client.iter_dialogs():
+            print('Сканим диалог {}'.format(dialog.name))
             dialog_statistics = {}
             count_questions = 0
             count_answers = 0
-            async for message in client.iter_messages(dialog.entity, config.LIMIT_MESSAGES_FOR_ANALYZE):
+            async for message in client.iter_messages(dialog.entity, offset_date=offset_date):
                 if message.from_id not in dialog_statistics:
                     user = await client.get_entity(message.from_id)
                     dialog_statistics[message.from_id] = {'username': user.username,
@@ -39,11 +42,16 @@ async def stat(loop):
                                            'count_questions': count_questions,
                                            'count_answers': count_answers}
 
-        message = ''
+        message = 'Отчёт об общении в чатах {} за последние {} дня.\n'.format(config.LABL_NAME,
+                                                                              config.COUNT_DAYS_FOR_ANALYZE)
         for dialog_name, dialog in all_statistics.items():
-            message += "Dialog '{}': questions - {}, answers - {}.\n".format(dialog_name,
-                                                                             dialog['count_questions'],
-                                                                             dialog['count_answers'])
+            message += "Группа {}:\n".format(dialog_name)
+            for id, statistics in dialog['detail_statistics'].items():
+                count_all_message = len(statistics['questions']) + len(statistics['answers'])
+                message += "– {} {} (@{}) – {} сообщений\n".format(statistics['first_name'] or '',
+                                                                   statistics['last_name'] or '',
+                                                                   statistics['username'] or 'Неопрпделён',
+                                                                   count_all_message)
         await client.send_message(config.TELEGRAM_ADMIN_NAME, message)
 
 

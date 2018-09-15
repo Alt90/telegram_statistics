@@ -1,4 +1,4 @@
-# telegram_stistics
+# telegram_statistics
 Check telegram statistics by dialogs with client
 
 ### Install
