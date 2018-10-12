@@ -7,31 +7,10 @@ from telethon import TelegramClient
 from pytz import timezone
 
 import config
+from utils import create_human_message
 
 
-logging.basicConfig(level=logging.WARNING, filename='logs.log')
-
-
-def pluralize(number, nouns):
-    value = str(number)
-    if str(value).endswith('1'):
-        return '{} {}'.format(value, nouns[0])
-    elif str(value)[-1:] in '234':
-        return '{} {}'.format(value, nouns[1])
-    else:
-        return '{} {}'.format(value, nouns[2])
-
-
-def human_timedelta(time_delta):
-    secconds = time_delta.total_seconds()
-    if secconds < 60:
-        return '{0:.2f} c'.format(secconds)
-    elif secconds < 3600:
-        return '{0:.2f} м'.format(secconds/60)
-    elif secconds < (3600*24):
-        return '{0:.2f} ч'.format(secconds/3600)
-    else:
-        return '{0:.0f} д'.format(secconds / 3600/24)
+logging.basicConfig(level=logging.INFO, filename='logs.log')
 
 
 async def stat(loop):
@@ -42,7 +21,7 @@ async def stat(loop):
         await client.connect()
         all_statistics = {}
         async for dialog in client.iter_dialogs():
-            print('Сканим диалог {}'.format(dialog.name))
+            logging.info('Сканим диалог {}'.format(dialog.name))
             dialog_statistics = {}
             count_questions = 0
             count_answers = 0
@@ -77,20 +56,7 @@ async def stat(loop):
                                                'count_questions': count_questions,
                                                'count_answers': count_answers}
 
-        message = 'Отчёт об общении в чатах {} за последние {}.\n'.format(config.LABL_NAME,
-                                                                          pluralize(config.COUNT_DAYS_FOR_ANALYZE,
-                                                                                    ['день', 'дня', 'дней']))
-        for dialog_name, dialog in all_statistics.items():
-            message += "Группа {}:\n".format(dialog_name)
-            for id, statistics in dialog['detail_statistics'].items():
-                count_all_message = len(statistics['questions']) + len(statistics['answers'])
-                sleep_time = datetime.now(tz=timezone('UTC')) - statistics['latest_message_data'].replace()
-                message += "– {} {} (@{}) – {} , молчание {}\n".format(statistics['first_name'] or '',
-                                                         statistics['last_name'] or '',
-                                                         statistics['username'] or 'Неоприделён',
-                                                         pluralize(count_all_message,
-                                                                   ['сообщение', 'сообщения', 'сообщений']),
-                                                         human_timedelta(sleep_time))
+        message = await create_human_message(all_statistics)
         try:
             await client.send_message(config.TELEGRAM_ADMIN_NAME, message)
         except BaseException as e:
